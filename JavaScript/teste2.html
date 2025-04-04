@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extrair Dados da Planilha Excel</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+</head>
+<body>
+    <h1>Upload de Planilha Excel</h1>
+    <input type="file" id="fileInput" accept=".xlsx, .xls" />
+    <button id="processButton">Processar Planilha</button>
+    <div id="output"></div>
+
+    <script>
+        document.getElementById('processButton').addEventListener('click', handleFile, false);
+
+        function handleFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert("Por favor, selecione um arquivo.");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+
+                // Selecionar a primeira aba
+                const sheetName = workbook.SheetNames[0];
+                const sheet = workbook.Sheets[sheetName];
+
+                // Converter a aba em JSON
+                const jsonData = XLSX.utils.sheet_to_json(sheet);
+
+                // Extrair os dados necessários
+                const atividades = jsonData.map(item => {
+                    return {
+                        descricao: item.Descrição,
+                        nomePessoalAtribuido: item['Nome do pessoal atribuído'],
+                        diasAgendados: item['Dias agendados'],
+                        horaInicioAgendada: item['Hora de início agendada'],
+                        fimAgendado: item['Fim Agendado'],
+                        datasAtividadeIndividual: item['Datas da atividade (Individual)'].split(';'),
+                        descricaoLocalizacaoAtribuida: item['Descrição da localização atribuída']
+                    };
+                });
+
+                // Exibir os dados extraídos
+                displayData(atividades);
+
+                // Enviar os dados para o servidor
+                sendDataToServer(atividades);
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        function displayData(atividades) {
+            const outputDiv = document.getElementById('output');
+            outputDiv.innerHTML = ''; // Limpar saída anterior
+
+            atividades.forEach(atividade => {
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <strong>Descrição:</strong> ${atividade.descricao}<br>
+                    <strong>Nome do Pessoal Atribuído:</strong> ${atividade.nomePessoalAtribuido}<br>
+                    <strong>Dias Agendados:</strong> ${atividade.diasAgendados}<br>
+                    <strong>Hora de Início Agendada:</strong> ${atividade.horaInicioAgendada}<br>
+                    <strong>Fim Agendado:</strong> ${atividade.fimAgendado}<br>
+                    <strong>Datas da Atividade (Individual):</strong><br>
+                    <ul>
+                        ${atividade.datasAtividadeIndividual.map(data => `<li>${data}</li>`).join('')}
+                    </ul>
+                    <strong>Descrição da Localização Atribuída:</strong> ${atividade.descricaoLocalizacaoAtribuida}<br>
+                    <hr>
+                `;
+                outputDiv.appendChild(div);
+            });
+        }
+
+        function sendDataToServer(atividades) {
+            fetch('http://localhost:3000/api/atividades', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(atividades),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Success:', data);
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        }
+    </script>
+</body>
+</html>

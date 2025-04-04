@@ -1,0 +1,210 @@
+:root {
+  --hora-height: 60px;
+  --start-hour: 7;
+  --corFundoCalendario: #fff1f8;
+  --corBordaEvento: #f2d3d8;
+}
+
+body {
+  font-family: system-ui, sans-serif;
+  margin: 20px;
+}
+
+h2 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.calendario {
+  display: flex;
+  width: 100%;
+  background-color: var(--corFundoCalendario);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.linha-do-tempo {
+  width: 50px;
+  display: flex;
+  flex-direction: column;
+}
+
+.espacador {
+  height: var(--hora-height);
+}
+
+.marcador-de-tempo {
+  height: var(--hora-height);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 5px;
+  box-sizing: border-box;
+  font-size: 0.8em;
+  color: #666;
+  border-bottom: 1px solid #eee;
+}
+
+.dias {
+  display: flex;
+  flex: 1;
+}
+
+.dia {
+  flex: 1;
+  border-left: 1px solid #eee;
+  position: relative;
+}
+
+.data {
+  text-align: center;
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+  height: var(--hora-height);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.numero-data {
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.dia-da-semana {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.eventos {
+  position: relative;
+  height: calc(16 * var(--hora-height));
+  /* Adicione um mínimo de espaço entre eventos */
+  padding-bottom: 5px;
+}
+
+.evento {
+  position: absolute;
+  width: 95%;
+  left: 2.5%;
+  border-radius: 5px;
+  padding: 5px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-left: 4px solid;
+  box-shadow: 0 2px 3px rgba(0,0,0,0.1);
+  /* Garante que o evento não fique muito estreito */
+  min-height: 30px;
+  /* Adiciona transição para suavizar movimentos */
+  transition: all 0.2s ease;
+}
+
+/* Quando eventos se sobrepõem, ajuste a largura e posição */
+.evento:nth-child(odd) {
+  width: 45%;
+  left: 2.5%;
+}
+
+.evento:nth-child(even) {
+  width: 45%;
+  left: 52.5%;
+}
+
+.evento .titulo {
+  margin: 0;
+  font-weight: bold;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.evento .horario, .evento .professor {
+  margin: 2px 0;
+  font-size: 0.7rem;
+  color: #555;
+}
+
+@media (max-width: 768px) {
+  .calendario {
+    flex-direction: column;
+  }
+  
+  .linha-do-tempo {
+    width: 100%;
+    flex-direction: row;
+    height: 30px;
+  }
+  
+  .espacador {
+    width: 50px;
+    height: auto;
+  }
+  
+  .marcador-de-tempo {
+    flex: 1;
+    height: auto;
+    align-items: center;
+    padding-top: 0;
+  }
+  
+  .dias {
+    flex-direction: column;
+  }
+  
+  .dia {
+    border-left: none;
+    border-top: 1px solid #eee;
+  }
+}
+
+
+/* Estilos para o modal de edição */
+.modal-edicao {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.5);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-conteudo {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 80%;
+  max-width: 500px;
+}
+
+.botoes-acao {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
+.botao {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.botao-editar {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.botao-excluir {
+  background-color: #f44336;
+  color: white;
+}
+
+.botao-cancelar {
+  background-color: #ccc;
+}
