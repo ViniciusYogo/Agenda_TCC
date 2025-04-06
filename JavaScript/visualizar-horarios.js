@@ -1,340 +1,173 @@
-// Dias da semana (0 = Domingo, 1 = Segunda, etc.)
+// Configurações globais
 const diasDaSemana = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
-const hoje = new Date();
+const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const HORA_INICIO = 7;
+const ALTURA_HORA = 60;
+let dataReferencia = new Date();
+let atividadeSelecionada = null;
 
-// Ajusta para a segunda-feira da semana atual
-const primeiraData = new Date(hoje);
-primeiraData.setDate(hoje.getDate() - hoje.getDay() + 1);
+// Cores para as matérias
+const CORES_MATERIAS = [
+  '#FFD1DC', '#B5EAD7', '#C7CEEA', '#E2F0CB', '#FFDAC1',
+  '#F8B195', '#F67280', '#C06C84', '#6C5B7B', '#355C7D',
+  '#A8E6CE', '#DCEDC2', '#FFD3B5', '#FFAAA6', '#FF8C94',
+  '#A2D7D8', '#BCC4DB', '#C1BBDD', '#D4A5A5', '#E0BBE4'
+];
 
-// Configurações de horário
-const HORA_INICIO = 7; // Primeira hora do calendário (7h)
-const ALTURA_HORA = 60; // Altura em pixels de cada hora
-
-// Função para gerar uma cor baseada no hash de uma string
-function getCorParaMateria(nomeMateria) {
-  const cores = [
-    '#FFD1DC', '#B5EAD7', '#C7CEEA', '#E2F0CB', '#FFDAC1',
-    '#F8B195', '#F67280', '#C06C84', '#6C5B7B', '#355C7D',
-    '#A8E6CE', '#DCEDC2', '#FFD3B5', '#FFAAA6', '#FF8C94',
-    '#A2D7D8', '#BCC4DB', '#C1BBDD', '#D4A5A5', '#E0BBE4'
-  ];
-  
+// Funções utilitárias
+function getCorParaMateria(nome) {
   let hash = 0;
-  for (let i = 0; i < nomeMateria.length; i++) {
-    hash = nomeMateria.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < nome.length; i++) {
+    hash = nome.charCodeAt(i) + ((hash << 5) - hash);
   }
-  
-  const index = Math.abs(hash) % cores.length;
-  return cores[index];
+  return CORES_MATERIAS[Math.abs(hash) % CORES_MATERIAS.length];
 }
 
 function escurecerCor(cor, percentual) {
-  let r = parseInt(cor.substring(1, 3), 16);
-  let g = parseInt(cor.substring(3, 5), 16);
-  let b = parseInt(cor.substring(5, 7), 16);
-
-  r = Math.floor(r * (100 - percentual) / 100);
-  g = Math.floor(g * (100 - percentual) / 100);
-  b = Math.floor(b * (100 - percentual) / 100);
-
-  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+  const num = parseInt(cor.replace('#', ''), 16);
+  const amt = Math.round(2.55 * percentual);
+  const R = Math.max(0, Math.min(255, (num >> 16) - amt));
+  const G = Math.max(0, Math.min(255, ((num >> 8) & 0x00FF) - amt));
+  const B = Math.max(0, Math.min(255, (num & 0x0000FF) - amt));
+  return `#${(1 << 24 | R << 16 | G << 8 | B).toString(16).slice(1)}`;
 }
 
-function calcularPosicaoEvento(horaInicio, horaFim) {
-  const inicioDecimal = horaInicio.getHours() + (horaInicio.getMinutes() / 60);
-  const fimDecimal = horaFim.getHours() + (horaFim.getMinutes() / 60);
-  
-  const top = (inicioDecimal - HORA_INICIO) * ALTURA_HORA;
-  const height = (fimDecimal - inicioDecimal) * ALTURA_HORA;
-  
-  return { top, height };
+function calcularPosicaoEvento(inicio, fim) {
+  const inicioDecimal = inicio.getHours() + (inicio.getMinutes() / 60);
+  const fimDecimal = fim.getHours() + (fim.getMinutes() / 60);
+  return {
+    top: (inicioDecimal - HORA_INICIO) * ALTURA_HORA,
+    height: (fimDecimal - inicioDecimal) * ALTURA_HORA
+  };
 }
 
-function atualizarDatas() {
-  const dias = document.querySelectorAll('.dia');
-  dias.forEach((dia, index) => {
-    const dataAtual = new Date(primeiraData);
-    dataAtual.setDate(primeiraData.getDate() + index);
-    
-    dia.querySelector('.numero-data').textContent = dataAtual.getDate();
-    
-    if (dataAtual.toDateString() === hoje.toDateString()) {
-      dia.style.backgroundColor = '#f5f5f5';
-    }
-  });
-}
-
-function processarDatasAtividade(datasString) {
+function processarDatas(datasString) {
   if (!datasString) return [];
-  if (Array.isArray(datasString)) return datasString;
-  return datasString.split(';').map(date => date.trim());
-}
-
-function parseTimeToDate(timeStr) {
-  if (!timeStr) return null;
-
-  const timeParts = timeStr.split(':');
-  if (timeParts.length >= 2) {
-    const hours = parseInt(timeParts[0]);
-    const minutes = parseInt(timeParts[1]);
-
-    if (isNaN(hours)) return null;
-
-    const date = new Date();
-    date.setHours(hours, minutes || 0, 0, 0);
-    return date;
-  }
-  return null;
-}
-
-function formatTime(timeStr) {
-  if (!timeStr) return '';
-  return timeStr.substring(0, 5);
-}
-
-// Função para organizar eventos sobrepostos
-function organizarEventosSobrepostos(diaElement) {
-  const eventos = Array.from(diaElement.querySelectorAll('.evento'));
   
-  // Ordena eventos por horário de início
+  if (Array.isArray(datasString)) {
+    return datasString.map(d => {
+      if (d instanceof Date) return d;
+      const parsedDate = new Date(d);
+      return isNaN(parsedDate.getTime()) ? null : parsedDate;
+    }).filter(d => d !== null);
+  }
+  
+  if (typeof datasString === 'string') {
+    return datasString.split(';')
+      .map(d => d.trim())
+      .filter(d => d)
+      .map(d => {
+        const parsedDate = new Date(d);
+        return isNaN(parsedDate.getTime()) ? null : parsedDate;
+      })
+      .filter(d => d !== null);
+  }
+  
+  return [];
+}
+
+function parseHora(timeStr) {
+  if (!timeStr) return null;
+  const [h, m] = timeStr.split(':').map(Number);
+  if (isNaN(h)) return null;
+  const d = new Date();
+  d.setHours(h, m || 0, 0, 0);
+  return d;
+}
+
+function formatarHora(timeStr) {
+  return timeStr ? timeStr.substring(0, 5) : '';
+}
+
+// Funções do calendário
+function organizarEventos(diaElement) {
+  const eventos = Array.from(diaElement.querySelectorAll('.evento'));
   eventos.sort((a, b) => parseFloat(a.style.top) - parseFloat(b.style.top));
   
-  let grupos = [];
-  let grupoAtual = [];
-  let ultimoFim = 0;
+  let grupos = [], grupoAtual = [], ultimoFim = 0;
   
-  eventos.forEach((evento, index) => {
-    const top = parseFloat(evento.style.top);
-    const height = parseFloat(evento.style.height);
+  eventos.forEach((e, i) => {
+    const top = parseFloat(e.style.top);
+    const height = parseFloat(e.style.height);
     const fim = top + height;
     
     if (top >= ultimoFim) {
-      if (grupoAtual.length > 0) grupos.push(grupoAtual);
-      grupoAtual = [evento];
+      if (grupoAtual.length) grupos.push(grupoAtual);
+      grupoAtual = [e];
       ultimoFim = fim;
     } else {
-      grupoAtual.push(evento);
+      grupoAtual.push(e);
       ultimoFim = Math.max(ultimoFim, fim);
     }
     
-    if (index === eventos.length - 1) grupos.push(grupoAtual);
+    if (i === eventos.length - 1) grupos.push(grupoAtual);
   });
   
-  grupos.forEach(grupo => {
-    if (grupo.length > 1) {
-      const largura = 90 / grupo.length;
-      grupo.forEach((evento, i) => {
-        evento.style.width = `${largura}%`;
-        evento.style.left = `${5 + (i * largura)}%`;
-        evento.style.zIndex = i + 1;
-      });
-    } else if (grupo.length === 1) {
-      grupo[0].style.width = '95%';
-      grupo[0].style.left = '2.5%';
-    }
-  });
-}
-
-async function fetchActivities() {
-  try {
-    const response = await fetch('http://localhost:3000/api/atividades');
-    const activities = await response.json();
-
-    document.querySelectorAll('.eventos').forEach(el => el.innerHTML = '');
-
-    // Primeiro adiciona todos os eventos
-    const promises = activities.map(activity => {
-      const datasAtividade = processarDatasAtividade(activity.datasAtividadeIndividual);
-
-      return Promise.all(datasAtividade.map(dataStr => {
-        if (!dataStr) return Promise.resolve();
-
-        try {
-          const dataAtividade = new Date(dataStr);
-          if (isNaN(dataAtividade.getTime())) return Promise.resolve();
-
-          const diaSemana = dataAtividade.getDay();
-          if (diaSemana === 0) return Promise.resolve();
-
-          const diaElement = document.querySelector(`.dia.${diasDaSemana[diaSemana]}`);
-          if (!diaElement) return Promise.resolve();
-
-          const numeroData = parseInt(diaElement.querySelector('.numero-data').textContent);
-          if (dataAtividade.getDate() !== numeroData) return Promise.resolve();
-
-          const horaInicio = parseTimeToDate(activity.horaInicioAgendada);
-          const horaFim = parseTimeToDate(activity.fimAgendado);
-
-          if (!horaInicio || !horaFim) return Promise.resolve();
-
-          const { top, height } = calcularPosicaoEvento(horaInicio, horaFim);
-
-          const eventoDiv = document.createElement('div');
-          eventoDiv.className = 'evento';
-
-          const corMateria = getCorParaMateria(activity.descricao);
-          eventoDiv.style.backgroundColor = corMateria;
-          eventoDiv.style.borderLeftColor = escurecerCor(corMateria, 20);
-
-          eventoDiv.style.top = `${top}px`;
-          eventoDiv.style.height = `${height}px`;
-
-          const horaInicioFormatada = formatTime(activity.horaInicioAgendada);
-          const horaFimFormatada = formatTime(activity.fimAgendado);
-
-          eventoDiv.innerHTML = `
-            <p class="titulo">${activity.descricao}</p>
-            <p class="horario">${horaInicioFormatada} - ${horaFimFormatada}</p>
-            <p class="professor">${activity.nomePessoalAtribuido}</p>
-          `;
-
-          diaElement.querySelector('.eventos').appendChild(eventoDiv);
-          return Promise.resolve();
-        } catch (e) {
-          console.error('Erro ao processar atividade:', e);
-          return Promise.resolve();
-        }
-      }));
+  grupos.forEach(g => {
+    const largura = 90 / g.length;
+    g.forEach((e, i) => {
+      e.style.width = `${largura}%`;
+      e.style.left = `${5 + (i * largura)}%`;
+      e.style.zIndex = i + 1;
     });
-
-    // Depois que todos os eventos foram adicionados, organiza os sobrepostos
-    await Promise.all(promises);
-    document.querySelectorAll('.dia').forEach(dia => {
-      organizarEventosSobrepostos(dia);
-    });
-
-  } catch (error) {
-    console.error('Erro ao buscar atividades:', error);
-    alert('Erro ao carregar os horários. Por favor, recarregue a página.');
-  }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  atualizarDatas();
-  fetchActivities();
-});
-
-
-// Variável global para armazenar a atividade selecionada
-let atividadeSelecionada = null;
-
-// Adicione esta função para mostrar o modal
-function mostrarModalEdicao(atividade) {
-  atividadeSelecionada = atividade;
-  const modal = document.getElementById('modalEdicao');
-  const detalhes = document.getElementById('detalhesAula');
-  
-  detalhes.innerHTML = `
-    <p><strong>Matéria:</strong> ${atividade.descricao}</p>
-    <p><strong>Professor:</strong> ${atividade.nomePessoalAtribuido}</p>
-    <p><strong>Horário:</strong> ${formatTime(atividade.horaInicioAgendada)} - ${formatTime(atividade.fimAgendado)}</p>
-    <p><strong>Data:</strong> ${new Date(atividade.datasAtividadeIndividual[0]).toLocaleDateString()}</p>
-  `;
-  
-  modal.style.display = 'flex';
-}
-
-// Adicione estas funções para manipular os eventos
-function configurarEventosModal() {
-  const modal = document.getElementById('modalEdicao');
-  const btnCancelar = document.getElementById('btnCancelar');
-  const btnEditar = document.getElementById('btnEditar');
-  const btnExcluir = document.getElementById('btnExcluir');
-  
-  // Fechar modal ao clicar no botão cancelar ou fora do conteúdo
-  btnCancelar.addEventListener('click', () => {
-    modal.style.display = 'none';
-  });
-  
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      modal.style.display = 'none';
-    }
-  });
-  
-  // Implementar função de edição
-  btnEditar.addEventListener('click', () => {
-    alert(`Editar aula: ${atividadeSelecionada.descricao}`);
-    // Aqui você pode implementar a lógica de edição
-    modal.style.display = 'none';
-  });
-  
-  // Implementar função de exclusão
-  btnExcluir.addEventListener('click', () => {
-    if (confirm(`Tem certeza que deseja excluir a aula "${atividadeSelecionada.descricao}"?`)) {
-      // Aqui você pode implementar a lógica de exclusão
-      alert(`Aula "${atividadeSelecionada.descricao}" excluída com sucesso!`);
-      modal.style.display = 'none';
-      // Recarregar as atividades
-      fetchActivities();
-    }
   });
 }
 
-// Modifique a criação do evento para adicionar o clique
-function criarElementoEvento(activity, diaElement) {
-  const horaInicio = parseTimeToDate(activity.horaInicioAgendada);
-  const horaFim = parseTimeToDate(activity.fimAgendado);
-  
-  if (!horaInicio || !horaFim) return null;
+function criarEvento(aula, diaElement) {
+  const inicio = parseHora(aula.horaInicioAgendada);
+  const fim = parseHora(aula.fimAgendado);
+  if (!inicio || !fim) return null;
 
-  const { top, height } = calcularPosicaoEvento(horaInicio, horaFim);
-  const horaInicioFormatada = formatTime(activity.horaInicioAgendada);
-  const horaFimFormatada = formatTime(activity.fimAgendado);
-  const corMateria = getCorParaMateria(activity.descricao);
+  const { top, height } = calcularPosicaoEvento(inicio, fim);
+  const cor = getCorParaMateria(aula.descricao);
 
-  const eventoDiv = document.createElement('div');
-  eventoDiv.className = 'evento';
-  eventoDiv.style.backgroundColor = corMateria;
-  eventoDiv.style.borderLeftColor = escurecerCor(corMateria, 20);
-  eventoDiv.style.top = `${top}px`;
-  eventoDiv.style.height = `${height}px`;
-
-  eventoDiv.innerHTML = `
-    <p class="titulo">${activity.descricao}</p>
-    <p class="horario">${horaInicioFormatada} - ${horaFimFormatada}</p>
-    <p class="professor">${activity.nomePessoalAtribuido}</p>
+  const evento = document.createElement('div');
+  evento.className = 'evento';
+  evento.dataset.id = aula.id;
+  evento.style.cssText = `
+    top: ${top}px;
+    height: ${height}px;
+    background-color: ${cor};
+    border-left: 4px solid ${escurecerCor(cor, 20)};
   `;
 
-  // Adiciona o evento de clique
-  eventoDiv.addEventListener('click', (e) => {
+  evento.innerHTML = `
+    <p class="titulo">${aula.descricao}</p>
+    <p class="horario">${formatarHora(aula.horaInicioAgendada)} - ${formatarHora(aula.fimAgendado)}</p>
+    <p class="professor">${aula.nomePessoalAtribuido}</p>
+  `;
+
+  evento.addEventListener('click', (e) => {
     e.stopPropagation();
-    mostrarModalEdicao(activity);
+    mostrarModal(aula);
   });
 
-  return eventoDiv;
+  return evento;
 }
 
-// Atualize a função fetchActivities para usar a nova função de criação
-async function fetchActivities() {
+async function carregarAtividades() {
   try {
     const response = await fetch('http://localhost:3000/api/atividades');
-    const activities = await response.json();
+    const atividades = await response.json();
 
-    document.querySelectorAll('.eventos').forEach(el => el.innerHTML = '');
+    document.querySelectorAll('.eventos').forEach(e => e.innerHTML = '');
 
-    activities.forEach(activity => {
-      const datasAtividade = processarDatasAtividade(activity.datasAtividadeIndividual);
+    const mesReferencia = dataReferencia.getMonth();
+    const anoReferencia = dataReferencia.getFullYear();
 
-      datasAtividade.forEach(dataStr => {
-        if (!dataStr) return;
-
+    atividades.forEach(a => {
+      processarDatas(a.datasAtividadeIndividual).forEach(d => {
         try {
-          const dataAtividade = new Date(dataStr);
-          if (isNaN(dataAtividade.getTime())) return;
+          const data = new Date(d);
+          if (isNaN(data.getTime())) return;
 
-          const diaSemana = dataAtividade.getDay();
-          if (diaSemana === 0) return;
+          if (data.getMonth() === mesReferencia && data.getFullYear() === anoReferencia) {
+            const diaSemana = data.getDay();
+            const diaElement = document.querySelector(`.dia.${diasDaSemana[diaSemana]}`);
+            if (!diaElement) return;
 
-          const diaElement = document.querySelector(`.dia.${diasDaSemana[diaSemana]}`);
-          if (!diaElement) return;
-
-          const numeroData = parseInt(diaElement.querySelector('.numero-data').textContent);
-          if (dataAtividade.getDate() !== numeroData) return;
-
-          const eventoDiv = criarElementoEvento(activity, diaElement);
-          if (eventoDiv) {
-            diaElement.querySelector('.eventos').appendChild(eventoDiv);
+            const evento = criarEvento(a, diaElement);
+            if (evento) diaElement.querySelector('.eventos').appendChild(evento);
           }
         } catch (e) {
           console.error('Erro ao processar atividade:', e);
@@ -342,20 +175,156 @@ async function fetchActivities() {
       });
     });
 
-    // Organiza os eventos sobrepostos
-    document.querySelectorAll('.dia').forEach(dia => {
-      organizarEventosSobrepostos(dia);
-    });
-
+    document.querySelectorAll('.dia').forEach(organizarEventos);
   } catch (error) {
-    console.error('Erro ao buscar atividades:', error);
-    alert('Erro ao carregar os horários. Por favor, recarregue a página.');
+    console.error('Erro ao carregar atividades:', error);
+    alert('Erro ao carregar horários. Recarregue a página.');
   }
 }
 
-// Adicione esta chamada no final do DOMContentLoaded
+function atualizarCalendario() {
+  document.getElementById('mes-ano').textContent = 
+    `${meses[dataReferencia.getMonth()]} ${dataReferencia.getFullYear()}`;
+
+  const diaSemana = dataReferencia.getDay();
+  const diff = dataReferencia.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1);
+  const segunda = new Date(dataReferencia);
+  segunda.setDate(diff);
+
+  const hoje = new Date();
+  const hojeFormatado = hoje.toDateString();
+
+  for (let i = 1; i <= 6; i++) {
+    const data = new Date(segunda);
+    data.setDate(segunda.getDate() + (i - 1));
+
+    const diaElement = document.querySelector(`.dia.${diasDaSemana[i]}`);
+    if (!diaElement) continue;
+
+    const numero = diaElement.querySelector('.numero-data');
+    if (numero) numero.textContent = data.getDate();
+
+    const mes = diaElement.querySelector('.mes-data');
+    if (mes) mes.textContent = (data.getDate() === 1 || i === 1) ? meses[data.getMonth()] : '';
+
+    if (data.toDateString() === hojeFormatado) {
+      diaElement.classList.add('hoje');
+      const marcadorHoje = document.createElement('div');
+      marcadorHoje.className = 'marcador-hoje';
+      diaElement.querySelector('.data').appendChild(marcadorHoje);
+    } else {
+      diaElement.classList.remove('hoje');
+      const marcadorExistente = diaElement.querySelector('.marcador-hoje');
+      if (marcadorExistente) {
+        marcadorExistente.remove();
+      }
+    }
+  }
+
+  carregarAtividades();
+}
+
+function configurarControles() {
+  document.getElementById('semana-anterior').addEventListener('click', () => {
+    dataReferencia.setDate(dataReferencia.getDate() - 7);
+    atualizarCalendario();
+  });
+
+  document.getElementById('hoje').addEventListener('click', () => {
+    dataReferencia = new Date();
+    atualizarCalendario();
+  });
+
+  document.getElementById('proxima-semana').addEventListener('click', () => {
+    dataReferencia.setDate(dataReferencia.getDate() + 7);
+    atualizarCalendario();
+  });
+}
+
+function mostrarModal(aula) {
+  atividadeSelecionada = aula;
+  const modal = document.getElementById('modalEdicao');
+  
+  document.getElementById('editDescricao').value = aula.descricao;
+  document.getElementById('editProfessor').value = aula.nomePessoalAtribuido;
+  document.getElementById('editHoraInicio').value = aula.horaInicioAgendada;
+  document.getElementById('editHoraFim').value = aula.fimAgendado;
+  
+  const primeiraData = processarDatas(aula.datasAtividadeIndividual)[0];
+  document.getElementById('editData').value = primeiraData.toISOString().split('T')[0];
+  
+  modal.style.display = 'flex';
+}
+
+function configurarModal() {
+  const modal = document.getElementById('modalEdicao');
+  const formEdicao = document.getElementById('formEdicao');
+  
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal || e.target.id === 'btnCancelar') {
+      modal.style.display = 'none';
+    }
+  });
+
+  document.getElementById('btnSalvar').addEventListener('click', async () => {
+    if (!formEdicao.checkValidity()) {
+      alert('Preencha todos os campos corretamente!');
+      return;
+    }
+
+    try {
+      const dadosAtualizados = {
+        descricao: document.getElementById('editDescricao').value,
+        nomePessoalAtribuido: document.getElementById('editProfessor').value,
+        horaInicioAgendada: document.getElementById('editHoraInicio').value,
+        fimAgendado: document.getElementById('editHoraFim').value,
+        datasAtividadeIndividual: [document.getElementById('editData').value]
+      };
+
+      const response = await fetch(`http://localhost:3000/api/atividades/${atividadeSelecionada.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dadosAtualizados)
+      });
+
+      if (!response.ok) throw new Error('Falha ao atualizar');
+
+      modal.style.display = 'none';
+      carregarAtividades();
+      alert('Atividade atualizada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao atualizar:', error);
+      alert('Erro ao atualizar atividade');
+    }
+  });
+
+  document.getElementById('btnExcluir').addEventListener('click', async () => {
+    if (!confirm(`Tem certeza que deseja excluir "${atividadeSelecionada.descricao}"?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:3000/api/atividades/${atividadeSelecionada.id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) throw new Error('Falha ao excluir');
+
+      modal.style.display = 'none';
+      carregarAtividades();
+      alert('Atividade excluída com sucesso!');
+    } catch (error) {
+      console.error('Erro ao excluir:', error);
+      alert('Erro ao excluir atividade');
+    }
+  });
+}
+
+// Inicialização
 document.addEventListener('DOMContentLoaded', () => {
-  atualizarDatas();
-  fetchActivities();
-  configurarEventosModal(); // Configura os eventos do modal
+  configurarControles();
+  configurarModal();
+  atualizarCalendario();
 });
