@@ -1,4 +1,3 @@
-/* Estilos gerais */
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   margin: 0;
@@ -12,7 +11,6 @@ h2 {
   margin-bottom: 20px;
 }
 
-/* Controles do calendário */
 .controles-calendario {
   display: flex;
   justify-content: center;
@@ -22,7 +20,7 @@ h2 {
 
 .controles-calendario button {
   padding: 8px 16px;
-  background-color: #1890ff;
+  background-color: #4CAF50;
   color: white;
   border: none;
   border-radius: 4px;
@@ -31,38 +29,42 @@ h2 {
 }
 
 .controles-calendario button:hover {
-  background-color: #40a9ff;
+  background-color: #45a049;
 }
 
-/* Calendário */
 .calendario {
   display: flex;
   background-color: white;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 }
 
 .linha-do-tempo {
-  width: 60px;
-  background-color: #fafafa;
-  padding-top: 40px;
+  width: 50px;
+  background-color: #f9f9f9;
+  display: flex;
+  flex-direction: column;
+}
+
+.espacador {
+  height: 60px;
 }
 
 .marcador-de-tempo {
-  height: 60px;
+  height: 70px;
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: flex-end;
-  padding-right: 8px;
-  font-size: 12px;
+  padding-right: 5px;
   color: #666;
-  box-sizing: border-box;
+  font-size: 12px;
+  border-top: 1px solid #eee;
 }
 
 .dias {
   display: flex;
-  flex-grow: 1;
+  flex: 1;
 }
 
 .dia {
@@ -75,24 +77,27 @@ h2 {
   border-right: none;
 }
 
+.dia.hoje .data {
+  background-color: #e8f5e9;
+}
+
 .data {
   padding: 10px;
   text-align: center;
   border-bottom: 1px solid #eee;
-  position: relative;
+  background-color: #f9f9f9;
 }
 
 .numero-data {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: bold;
   margin: 0;
-  color: #333;
 }
 
 .dia-da-semana {
   font-size: 14px;
   color: #666;
-  margin: 0;
+  margin: 5px 0;
 }
 
 .mes-data {
@@ -103,42 +108,60 @@ h2 {
 
 .eventos {
   position: relative;
-  height: 960px; /* 16 horas * 60px */
+  min-height: calc(16 * 70px);
 }
 
 .evento {
   position: absolute;
-  width: 90%;
   left: 5%;
-  padding: 8px;
+  width: 90%;
   box-sizing: border-box;
   border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 10px;
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .evento:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: scale(1.02);
+  z-index: 100;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.evento.confirmado {
+  border-left: 4px solid #4CAF50 !important;
 }
 
 .evento .titulo {
+  font-size: 16px;
   font-weight: bold;
-  margin: 0 0 4px 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  margin-bottom: 5px;
+  word-break: break-word;
 }
 
-.evento .horario, .evento .professor {
-  font-size: 12px;
-  margin: 0;
-  color: #333;
+.evento .horario {
+  font-size: 14px;
+  margin-bottom: 3px;
 }
 
-/* Modal de edição */
+.evento .professor {
+  font-size: 14px;
+  font-style: italic;
+}
+
+.marcador-hoje {
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 10px;
+  background-color: #4CAF50;
+  border-radius: 50%;
+}
+
 .modal-edicao {
   display: none;
   position: fixed;
@@ -156,9 +179,32 @@ h2 {
   background-color: white;
   padding: 20px;
   border-radius: 8px;
-  width: 90%;
-  max-width: 500px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  width: 400px;
+  max-width: 90%;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.modal-conteudo h3 {
+  margin-top: 0;
+  color: #333;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-sizing: border-box;
 }
 
 .botoes-acao {
@@ -176,24 +222,62 @@ h2 {
   transition: background-color 0.3s;
 }
 
-.botao-cancelar {
-  background-color: #f5f5f5;
+.botao-salvar {
+  background-color: #4CAF50;
+  color: white;
 }
 
-.botao-cancelar:hover {
-  background-color: #e8e8e8;
+.botao-salvar:hover {
+  background-color: #45a049;
 }
 
 .botao-excluir {
-  background-color: #ff4d4f;
+  background-color: #f44336;
   color: white;
 }
 
 .botao-excluir:hover {
-  background-color: #ff7875;
+  background-color: #d32f2f;
 }
 
-/* Destaque para o dia atual */
-.dia.hoje {
-  background-color: #e6f7ff;
+.botao-cancelar {
+  background-color: #e0e0e0;
+}
+
+.botao-cancelar:hover {
+  background-color: #bdbdbd;
+}
+
+.check-btn {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: rgba(255, 255, 255, 0.7);
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 14px;
+}
+
+.check-btn.checked {
+  background: #4CAF50;
+  color: white;
+}
+
+.check-btn:hover {
+  background: #ddd;
+}
+
+.check-btn.checked:hover {
+  background: #45a049;
+}
+
+.evento.confirmado {
+  border-left: 4px solid #4CAF50 !important;
 }

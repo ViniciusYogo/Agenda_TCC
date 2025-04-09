@@ -1,8 +1,8 @@
 // Configurações globais
 const diasDaSemana = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
-const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const HORA_INICIO = 7;
-const ALTURA_HORA = 60;
+const ALTURA_HORA = 70; // Aumentado para cards maiores
 let dataReferencia = new Date();
 let atividadeSelecionada = null;
 
@@ -46,9 +46,15 @@ function processarDatas(datasString) {
   
   if (Array.isArray(datasString)) {
     return datasString.map(d => {
-      if (d instanceof Date) return d;
+      if (d instanceof Date) {
+        // Ajusta para o fuso horário local
+        const date = new Date(d);
+        return new Date(date.getTime() + date.getTimezoneOffset() * 60000);
+      }
       const parsedDate = new Date(d);
-      return isNaN(parsedDate.getTime()) ? null : parsedDate;
+      if (isNaN(parsedDate.getTime())) return null;
+      // Ajusta para o fuso horário local
+      return new Date(parsedDate.getTime() + parsedDate.getTimezoneOffset() * 60000);
     }).filter(d => d !== null);
   }
   
@@ -58,14 +64,15 @@ function processarDatas(datasString) {
       .filter(d => d)
       .map(d => {
         const parsedDate = new Date(d);
-        return isNaN(parsedDate.getTime()) ? null : parsedDate;
+        if (isNaN(parsedDate.getTime())) return null;
+        // Ajusta para o fuso horário local
+        return new Date(parsedDate.getTime() + parsedDate.getTimezoneOffset() * 60000);
       })
       .filter(d => d !== null);
   }
   
   return [];
 }
-
 function parseHora(timeStr) {
   if (!timeStr) return null;
   const [h, m] = timeStr.split(':').map(Number);
@@ -122,24 +129,67 @@ function criarEvento(aula, diaElement) {
   const cor = getCorParaMateria(aula.descricao);
 
   const evento = document.createElement('div');
-  evento.className = 'evento';
+  evento.className = `evento ${aula.confirmada ? 'confirmado' : ''}`;
   evento.dataset.id = aula.id;
   evento.style.cssText = `
     top: ${top}px;
     height: ${height}px;
     background-color: ${cor};
     border-left: 4px solid ${escurecerCor(cor, 20)};
+    position: relative;
+    padding: 10px;
+    font-size: 14px;
+    min-height: ${ALTURA_HORA}px;
+    box-sizing: border-box;
+    overflow: hidden;
+    transition: all 0.2s ease;
   `;
+
+  // Adiciona botão de check
+  const checkBtn = document.createElement('button');
+  checkBtn.className = `check-btn ${aula.confirmada ? 'checked' : ''}`;
+  checkBtn.innerHTML = '✓';
+  checkBtn.title = aula.confirmada ? 'Aula confirmada' : 'Confirmar aula';
+  checkBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const wasConfirmed = checkBtn.classList.contains('checked');
+
+    try {
+      const response = await fetch(`http://localhost:3000/api/atividades/${aula.id}/confirmar`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          confirmada: !wasConfirmed
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Falha ao atualizar status');
+      }
+
+      checkBtn.classList.toggle('checked');
+      evento.classList.toggle('confirmado');
+      checkBtn.title = checkBtn.classList.contains('checked') ? 'Aula confirmada' : 'Confirmar aula';
+    } catch (error) {
+      console.error('Erro ao confirmar aula:', error);
+    }
+  });
 
   evento.innerHTML = `
-    <p class="titulo">${aula.descricao}</p>
-    <p class="horario">${formatarHora(aula.horaInicioAgendada)} - ${formatarHora(aula.fimAgendado)}</p>
-    <p class="professor">${aula.nomePessoalAtribuido}</p>
+    <p class="titulo" style="font-size: 16px; font-weight: bold; margin-bottom: 5px;">${aula.descricao}</p>
+    <p class="horario" style="font-size: 14px; margin-bottom: 3px;">${formatarHora(aula.horaInicioAgendada)} - ${formatarHora(aula.fimAgendado)}</p>
+    <p class="professor" style="font-size: 14px; font-style: italic;">${aula.nomePessoalAtribuido}</p>
   `;
 
+  evento.appendChild(checkBtn);
+
   evento.addEventListener('click', (e) => {
-    e.stopPropagation();
-    mostrarModal(aula);
+    if (e.target !== checkBtn) {
+      e.stopPropagation();
+      mostrarModal(aula);
+    }
   });
 
   return evento;
@@ -148,21 +198,44 @@ function criarEvento(aula, diaElement) {
 async function carregarAtividades() {
   try {
     const response = await fetch('http://localhost:3000/api/atividades');
+    if (!response.ok) {
+      throw new Error(`Erro HTTP: ${response.status}`);
+    }
     const atividades = await response.json();
 
+    // Limpa todos os eventos existentes
     document.querySelectorAll('.eventos').forEach(e => e.innerHTML = '');
 
-    const mesReferencia = dataReferencia.getMonth();
-    const anoReferencia = dataReferencia.getFullYear();
+    // Obtém a semana atual baseada na dataReferencia
+    const diaSemanaRef = dataReferencia.getDay();
+    const diff = dataReferencia.getDate() - diaSemanaRef + (diaSemanaRef === 0 ? -6 : 1);
+    const segunda = new Date(dataReferencia);
+    segunda.setDate(diff);
 
+    // Cria um array com as datas da semana atual
+    const datasDaSemana = [];
+    for (let i = 0; i < 6; i++) {
+      const data = new Date(segunda);
+      data.setDate(segunda.getDate() + i);
+      datasDaSemana.push(data);
+    }
+
+    // Processa cada atividade
     atividades.forEach(a => {
       processarDatas(a.datasAtividadeIndividual).forEach(d => {
         try {
-          const data = new Date(d);
-          if (isNaN(data.getTime())) return;
+          const dataAtividade = new Date(d);
+          if (isNaN(dataAtividade.getTime())) return;
 
-          if (data.getMonth() === mesReferencia && data.getFullYear() === anoReferencia) {
-            const diaSemana = data.getDay();
+          // Verifica se a data da atividade está na semana atual
+          const dataNaSemana = datasDaSemana.some(dataSemana =>
+            dataSemana.getDate() === dataAtividade.getDate() &&
+            dataSemana.getMonth() === dataAtividade.getMonth() &&
+            dataSemana.getFullYear() === dataAtividade.getFullYear()
+          );
+
+          if (dataNaSemana) {
+            const diaSemana = dataAtividade.getDay();
             const diaElement = document.querySelector(`.dia.${diasDaSemana[diaSemana]}`);
             if (!diaElement) return;
 
@@ -175,6 +248,7 @@ async function carregarAtividades() {
       });
     });
 
+    // Organiza os eventos em cada dia
     document.querySelectorAll('.dia').forEach(organizarEventos);
   } catch (error) {
     console.error('Erro ao carregar atividades:', error);
@@ -183,7 +257,7 @@ async function carregarAtividades() {
 }
 
 function atualizarCalendario() {
-  document.getElementById('mes-ano').textContent = 
+  document.getElementById('mes-ano').textContent =
     `${meses[dataReferencia.getMonth()]} ${dataReferencia.getFullYear()}`;
 
   const diaSemana = dataReferencia.getDay();
@@ -244,22 +318,29 @@ function configurarControles() {
 function mostrarModal(aula) {
   atividadeSelecionada = aula;
   const modal = document.getElementById('modalEdicao');
-  
+
   document.getElementById('editDescricao').value = aula.descricao;
   document.getElementById('editProfessor').value = aula.nomePessoalAtribuido;
   document.getElementById('editHoraInicio').value = aula.horaInicioAgendada;
   document.getElementById('editHoraFim').value = aula.fimAgendado;
-  
-  const primeiraData = processarDatas(aula.datasAtividadeIndividual)[0];
-  document.getElementById('editData').value = primeiraData.toISOString().split('T')[0];
-  
+
+  const datasValidas = processarDatas(aula.datasAtividadeIndividual).filter(d => !isNaN(d.getTime()));
+  if (datasValidas.length > 0) {
+    // Ajusta a data para o fuso horário local
+    const dataLocal = new Date(datasValidas[0]);
+    dataLocal.setMinutes(dataLocal.getMinutes() - dataLocal.getTimezoneOffset());
+    document.getElementById('editData').value = dataLocal.toISOString().slice(0, 10);
+  } else {
+    document.getElementById('editData').value = '';
+  }
+
   modal.style.display = 'flex';
 }
 
 function configurarModal() {
   const modal = document.getElementById('modalEdicao');
   const formEdicao = document.getElementById('formEdicao');
-  
+
   modal.addEventListener('click', (e) => {
     if (e.target === modal || e.target.id === 'btnCancelar') {
       modal.style.display = 'none';
@@ -271,16 +352,27 @@ function configurarModal() {
       alert('Preencha todos os campos corretamente!');
       return;
     }
-
+  
     try {
+      // Obtém a data do input e ajusta para o fuso horário correto
+      const dataInput = document.getElementById('editData').value;
+      const novaData = new Date(dataInput);
+      
+      // Ajusta para evitar problemas de fuso horário
+      const dataAjustada = new Date(novaData.getTime() + novaData.getTimezoneOffset() * 60000);
+      
+      if (isNaN(dataAjustada.getTime())) {
+        throw new Error('Data inválida');
+      }
+  
       const dadosAtualizados = {
         descricao: document.getElementById('editDescricao').value,
         nomePessoalAtribuido: document.getElementById('editProfessor').value,
         horaInicioAgendada: document.getElementById('editHoraInicio').value,
         fimAgendado: document.getElementById('editHoraFim').value,
-        datasAtividadeIndividual: [document.getElementById('editData').value]
+        datasAtividadeIndividual: [dataAjustada.toISOString()]
       };
-
+  
       const response = await fetch(`http://localhost:3000/api/atividades/${atividadeSelecionada.id}`, {
         method: 'PUT',
         headers: {
@@ -288,15 +380,41 @@ function configurarModal() {
         },
         body: JSON.stringify(dadosAtualizados)
       });
-
-      if (!response.ok) throw new Error('Falha ao atualizar');
-
+  
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Falha ao atualizar' }));
+        throw new Error(errorData.error || 'Falha ao atualizar');
+      }
+  
+      const result = await response.json();
+      
+      // Fecha o modal
       modal.style.display = 'none';
-      carregarAtividades();
+      
+      // Encontra o card específico e o remove
+      const cardAntigo = document.querySelector(`.evento[data-id="${atividadeSelecionada.id}"]`);
+      if (cardAntigo) {
+        cardAntigo.remove();
+      }
+      
+      // Adiciona o card atualizado no dia correto
+      const dataAtividade = new Date(result.datasAtividadeIndividual);
+      if (!isNaN(dataAtividade.getTime())) {
+        const diaSemana = dataAtividade.getDay();
+        const diaElement = document.querySelector(`.dia.${diasDaSemana[diaSemana]}`);
+        if (diaElement) {
+          const novoEvento = criarEvento(result, diaElement);
+          if (novoEvento) {
+            diaElement.querySelector('.eventos').appendChild(novoEvento);
+            organizarEventos(diaElement);
+          }
+        }
+      }
+      
       alert('Atividade atualizada com sucesso!');
     } catch (error) {
       console.error('Erro ao atualizar:', error);
-      alert('Erro ao atualizar atividade');
+      alert(`Erro ao atualizar atividade: ${error.message}`);
     }
   });
 
@@ -310,17 +428,20 @@ function configurarModal() {
         method: 'DELETE'
       });
 
-      if (!response.ok) throw new Error('Falha ao excluir');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Falha ao excluir' }));
+        throw new Error(errorData.error || 'Falha ao excluir');
+      }
 
       modal.style.display = 'none';
-      carregarAtividades();
+      await carregarAtividades();
       alert('Atividade excluída com sucesso!');
     } catch (error) {
       console.error('Erro ao excluir:', error);
-      alert('Erro ao excluir atividade');
+      alert(`Erro ao excluir atividade: ${error.message}`);
     }
   });
-}
+};
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {

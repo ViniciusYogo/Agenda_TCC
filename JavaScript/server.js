@@ -4,7 +4,7 @@ const cors = require('cors');
 const app = express();
 const port = 3000;
 
-// Configuração do MySQL com tratamento de erro melhorado
+// Configuração do MySQL
 let db;
 try {
   db = mysql.createPool({
@@ -17,7 +17,7 @@ try {
     queueLimit: 0
   });
 
-  // Testar a conexão imediatamente
+  // Testar a conexão
   db.getConnection()
     .then(conn => {
       console.log('Conexão com o MySQL estabelecida com sucesso!');
@@ -35,14 +35,13 @@ try {
 // Middleware
 app.use(cors({
   origin: ['http://127.0.0.1:5500', 'http://localhost'],
-  methods: ['GET', 'POST', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type']
 }));
 
-app.options('*', cors());
 app.use(express.json());
 
-// Rota de teste do servidor
+// Rotas
 app.get('/api/test', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT 1 + 1 AS solution');
@@ -52,18 +51,6 @@ app.get('/api/test', async (req, res) => {
   }
 });
 
-// Rota de teste de conexão com o banco
-app.get('/api/test-db', async (req, res) => {
-  try {
-    const [rows] = await db.query('SELECT 1 + 1 AS result');
-    res.json({ dbStatus: 'OK', result: rows[0].result });
-  } catch (error) {
-    console.error('Erro no teste do banco:', error);
-    res.status(500).json({ dbStatus: 'ERROR', error: error.message });
-  }
-});
-
-// Rota para buscar atividades
 app.get('/api/atividades', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM atividades');
@@ -74,10 +61,7 @@ app.get('/api/atividades', async (req, res) => {
   }
 });
 
-// Rota principal para inserir atividades
 app.post('/api/atividades', async (req, res) => {
-  console.log('Dados recebidos:', req.body);
-
   if (!Array.isArray(req.body)) {
     return res.status(400).json({ error: 'O corpo da requisição deve ser um array' });
   }
@@ -89,15 +73,13 @@ app.post('/api/atividades', async (req, res) => {
     
     try {
       for (const atividade of req.body) {
-        // Garante que datasAtividadeIndividual seja tratada corretamente
         const datas = Array.isArray(atividade.datasAtividadeIndividual) 
           ? atividade.datasAtividadeIndividual 
           : (atividade.datasAtividadeIndividual ? atividade.datasAtividadeIndividual.split(';') : []);
         
         for (const data of datas) {
-          if (!data) continue; // Pula datas vazias
+          if (!data) continue;
           
-          // Verifica se já existe um registro com a mesma descrição, professor e data
           const [existing] = await conn.query(
             `SELECT * FROM atividades WHERE 
              descricao = ? AND 
@@ -112,11 +94,10 @@ app.post('/api/atividades', async (req, res) => {
               {
                 descricao: atividade.descricao,
                 nomePessoalAtribuido: atividade.nomePessoalAtribuido,
-                diasAgendados: atividade.diasAgendados || '',
                 horaInicioAgendada: atividade.horaInicioAgendada || '',
                 fimAgendado: atividade.fimAgendado || '',
                 datasAtividadeIndividual: data,
-                descricaoLocalizacaoAtribuida: atividade.descricaoLocalizacaoAtribuida || ''
+                confirmada: false
               }
             );
             inserted++;
@@ -126,46 +107,98 @@ app.post('/api/atividades', async (req, res) => {
         }
       }
       conn.release();
-      res.json({ 
-        success: true, 
-        inserted, 
-        skipped,
-        message: `Atividades processadas com sucesso! Inseridas: ${inserted}, Ignoradas: ${skipped}`
-      });
-    } catch (insertError) {
+      res.json({ success: true, inserted, skipped });
+    } catch (error) {
       conn.release();
-      console.error('Erro ao inserir atividade:', insertError);
-      res.status(500).json({ 
-        success: false, 
-        inserted,
-        skipped,
-        error: insertError.message 
-      });
+      console.error('Erro ao inserir atividade:', error);
+      res.status(500).json({ success: false, error: error.message });
     }
   } catch (error) {
     console.error('Erro geral:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Rota para limpar todas as atividades (APENAS PARA DESENVOLVIMENTO)
-app.delete('/api/atividades', async (req, res) => {
-  if (process.env.NODE_ENV !== 'development') {
-    return res.status(403).json({ error: 'Operação não permitida em produção' });
-  }
-  
+app.put('/api/atividades/:id', async (req, res) => {
   try {
-    const [result] = await db.query('DELETE FROM atividades');
-    res.json({ 
-      success: true, 
-      deleted: result.affectedRows,
-      message: `Todas as atividades (${result.affectedRows}) foram removidas`
-    });
+    const { id } = req.params;
+    const { 
+      descricao, 
+      nomePessoalAtribuido, 
+      horaInicioAgendada, 
+      fimAgendado,
+      datasAtividadeIndividual
+    } = req.body;
+
+    // Validação básica
+    if (!descricao || !nomePessoalAtribuido || !horaInicioAgendada || !fimAgendado) {
+      return res.status(400).json({ error: 'Campos obrigatórios faltando' });
+    }
+
+    const [result] = await db.query(
+      `UPDATE atividades SET 
+        descricao = ?,
+        nomePessoalAtribuido = ?,
+        horaInicioAgendada = ?,
+        fimAgendado = ?,
+        datasAtividadeIndividual = ?
+      WHERE id = ?`,
+      [
+        descricao,
+        nomePessoalAtribuido,
+        horaInicioAgendada,
+        fimAgendado,
+        Array.isArray(datasAtividadeIndividual) ? datasAtividadeIndividual.join(';') : datasAtividadeIndividual,
+        id
+      ]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Atividade não encontrada' });
+    }
+
+    // Retorna a atividade atualizada
+    const [updated] = await db.query('SELECT * FROM atividades WHERE id = ?', [id]);
+    res.json({ success: true, atividade: updated[0] });
   } catch (error) {
-    console.error('Erro ao limpar atividades:', error);
+    console.error('Erro ao atualizar atividade:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/atividades/:id/confirmar', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { confirmada } = req.body;
+
+    const [result] = await db.query(
+      'UPDATE atividades SET confirmada = ? WHERE id = ?',
+      [confirmada, id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Atividade não encontrada' });
+    }
+
+    res.json({ success: true, message: 'Status de confirmação atualizado' });
+  } catch (error) {
+    console.error('Erro ao confirmar aula:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/atividades/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [result] = await db.query('DELETE FROM atividades WHERE id = ?', [id]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Atividade não encontrada' });
+    }
+    
+    res.json({ success: true, message: 'Atividade excluída com sucesso' });
+  } catch (error) {
+    console.error('Erro ao excluir atividade:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -173,12 +206,4 @@ app.delete('/api/atividades', async (req, res) => {
 // Iniciar servidor
 app.listen(port, () => {
   console.log(`Servidor rodando em http://localhost:${port}`);
-  console.log('Rotas disponíveis:');
-  console.log(`- GET  http://localhost:${port}/api/test`);
-  console.log(`- GET  http://localhost:${port}/api/test-db`);
-  console.log(`- GET  http://localhost:${port}/api/atividades`);
-  console.log(`- POST http://localhost:${port}/api/atividades`);
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`- DELETE http://localhost:${port}/api/atividades (APENAS DESENVOLVIMENTO)`);
-  }
 });
